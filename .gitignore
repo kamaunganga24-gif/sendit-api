@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# Environment variables & secrets (CRITICAL)
+.env
+.env.*
+!.env.example
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker / Local Database storage
+postgres_data/
+*.sqlite3
+*.db
+
+# Testing and Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Operating System files
+Thumbs.db
+Desktop.ini
+.DS_Store
