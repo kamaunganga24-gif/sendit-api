@@ -2,7 +2,7 @@ import os
 import json
 import shutil
 import aiofiles
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from contextlib import asynccontextmanager
 
@@ -24,10 +24,12 @@ from auth import (
 )
 from services.weather import get_weather, dispatch_webhook_event
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     yield
+
 
 app = FastAPI(title="SendIt Document Management API", version="1.0.0", lifespan=lifespan)
 
@@ -40,6 +42,14 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 MAX_FILE_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 5 * 1024 * 1024))
 ALLOWED_EXTENSIONS = os.getenv("ALLOWED_EXTENSIONS", ".pdf,.jpg,.jpeg,.png,.docx").split(",")
+
+
+# ==================== HEALTH ENDPOINT ====================
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "sendit-api"}
+
 
 # ==================== AUTH ENDPOINTS ====================
 
@@ -60,6 +70,7 @@ def register(user_in: UserCreate, session: Session = Depends(get_session)):
     session.refresh(db_user)
     return db_user
 
+
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.username == form_data.username)).first()
@@ -68,6 +79,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = D
     
     access_token = create_access_token(data={"sub": user.username, "role": user.role})
     return {"access_token": access_token, "token_type": "bearer"}
+
 
 # ==================== DOCUMENT ENDPOINTS ====================
 
@@ -91,7 +103,7 @@ async def upload_document(
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(400, f"File exceeds maximum allowed limit of {MAX_FILE_SIZE // (1024*1024)}MB")
 
-    # Exercise 2: Calculate Versioning
+    # Versioning calculation
     existing_doc = session.exec(
         select(Document)
         .where(Document.original_filename == file.filename, Document.uploader_id == current_user.id)
@@ -134,7 +146,7 @@ async def upload_document(
         w_data = await get_weather(city, country)
         if w_data and "error" not in w_data:
             doc.weather_data = json.dumps(w_data)
-            doc.weather_fetched_at = datetime.utcnow()
+            doc.weather_fetched_at = datetime.now(timezone.utc)
             doc.status = "enriched"
         else:
             doc.status = "uploaded"
@@ -143,12 +155,12 @@ async def upload_document(
         doc.status = "uploaded"
         session.commit()
 
-    # Exercise 3: Dispatch Webhook
+    # Dispatch Webhook
     await dispatch_webhook_event("document.uploaded", {"document_id": doc.id, "status": doc.status}, session)
 
     return {"message": "Upload successful", "document_id": doc.id, "version": doc.version, "status": doc.status}
 
-# Exercise 1: Multi-filtered Search Endpoint
+
 @app.get("/documents/search")
 @limiter.limit("20/minute")
 def search_documents(
@@ -184,6 +196,7 @@ def search_documents(
 
     return session.exec(query).all()
 
+
 @app.get("/documents")
 def list_documents(
     status: Optional[str] = None,
@@ -200,7 +213,7 @@ def list_documents(
         query = query.where(Document.city == city)
     return session.exec(query).all()
 
-# Exercise 3: Webhook Registration
+
 @app.post("/webhooks/register", status_code=201)
 def register_webhook(
     url: str,
